@@ -133,20 +133,19 @@
 					<release>17</release>
 				</configuration>
 			</plugin>
+				<plugin>
+					<groupId>com.heroku.sdk</groupId>
+					<artifactId>heroku-maven-plugin</artifactId>
+					<version>3.0.7</version>
+					<configuration>
+						<appName>demo</appName>
+					</configuration>
+				</plugin>
 
 		</plugins>
 	</build>
 
-	<distributionManagement>
-		<snapshotRepository>
-			<id>local</id>
-			<url>http://localhost:8081/repository/abc123/</url>
-		</snapshotRepository>
-		<repository>
-			<id>nexus</id>
-			<url>http://localhost:8081/repository/release123/</url>
-		</repository>
-	</distributionManagement>
+
 	
 	<repositories>
 		<repository>
