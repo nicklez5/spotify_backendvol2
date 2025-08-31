@@ -1,5 +1,8 @@
 package com.spotify11.demo.controller;
 
+import com.spotify11.demo.dtos.PlaylistDetailDto;
+import com.spotify11.demo.dtos.PlaylistDto;
+import com.spotify11.demo.dtos.TrackDto;
 import com.spotify11.demo.entity.Playlist;
 import com.spotify11.demo.entity.Song;
 
@@ -10,12 +13,23 @@ import com.spotify11.demo.exception.UserException;
 
 import com.spotify11.demo.repo.PlaylistRepo;
 import com.spotify11.demo.repo.UserRepository;
+import com.spotify11.demo.security.CustomUserPrincipal;
 import com.spotify11.demo.services.PlaylistService;
+import com.spotify11.demo.services.PlaylistTrackService;
+import com.spotify11.demo.services.SongService;
 
 import jakarta.transaction.Transactional;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
 
+import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.server.ResponseStatusException;
+
+import java.io.IOException;
 import java.util.List;
 
 @CrossOrigin
@@ -25,45 +39,72 @@ public class PlaylistController {
 
     private final PlaylistService playlistService;
     private PlaylistRepo playlistRepo;
+    private final SongService songService;
     private final UserRepository userRepo;
-    public PlaylistController(PlaylistService playlistService, UserRepository userRepo, PlaylistRepo playlistRepo) {
+    private final PlaylistTrackService playlistTrackService;
+    public PlaylistController(PlaylistService playlistService, SongService songService, UserRepository userRepo, PlaylistRepo playlistRepo, PlaylistTrackService playlistTrackService) {
         this.playlistService = playlistService;
         this.userRepo = userRepo;
         this.playlistRepo = playlistRepo;
+        this.playlistTrackService = playlistTrackService;
+        this.songService = songService;
     }
 
 
     @Transactional
-    @GetMapping("/info")
-    public Playlist getPlaylist(@RequestParam("email") String email){
-        if(userRepo.findByEmail(email).isPresent()){
-            User user = userRepo.findByEmail(email).get();
-            return user.getPlaylist();
-        }
-        return null;
+    @GetMapping("/{id}/info")
+    public ResponseEntity<PlaylistDto> getPlaylist(@AuthenticationPrincipal CustomUserPrincipal me, @PathVariable("id") int id){
+        User user = userRepo.findById(me.getId())
+      .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+
+        Playlist p = user.getPlaylists().stream()
+            .filter(pl -> pl.getId() == (id))
+            .findFirst()
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Playlist not found"));
+        return ResponseEntity.ok(PlaylistDto.from(p));
     }
     // ADD SONG
 
     @Transactional
-    @PostMapping("/addSong/{song_id}")
-    public ResponseEntity<Playlist> addSongForPlaylist(@PathVariable("song_id") int song_id, @RequestParam("email") String email) throws Exception {
+    @PostMapping("/{id}/addSong/{song_id}")
+    public ResponseEntity<PlaylistDetailDto> addSongForPlaylist(@AuthenticationPrincipal CustomUserPrincipal me,@PathVariable("id") int id,@PathVariable("song_id") int song_id) throws Exception {
         try{
-            Playlist playlist1 = playlistService.addSong(song_id, email);
-            playlistRepo.save(playlist1);
-            return ResponseEntity.ok(playlist1);
+            
+            var dto = playlistTrackService.addSongToPlaylist(me.getId(), id, song_id);
+            return ResponseEntity.ok().body(dto);
         } catch (Exception e) {
             throw new Exception("Song ID: " + song_id + "could not be found");
         }
 
     }
 
+    @PostMapping(value="/{id}/cover", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+        public PlaylistDto uploadCover(
+        @AuthenticationPrincipal CustomUserPrincipal me,
+        @PathVariable Integer id,
+        @RequestPart("file") MultipartFile file) throws IOException {
+        return playlistService.updateCover(me.getId(), id, file);
+    }
 
-    @DeleteMapping("/removeSong/{song_id}")
-    public ResponseEntity<Playlist> removeSongFromPlaylist(@PathVariable("song_id") int song_id, @RequestParam("email") String email) throws Exception {
+    
+    @GetMapping("/{id}/tracks")
+    public List<TrackDto> tracks(@AuthenticationPrincipal CustomUserPrincipal me,
+                             @PathVariable Integer id) {
+    return songService.listTracksForPlaylist(me.getId(), id);
+    }
+    // @PutMapping("/{id}/cover")
+    // public ResponseEntity<PlaylistDto> uploadCover(
+    //     @AuthenticationPrincipal CustomUserPrincipal me,
+    //     @PathVariable Integer id,
+    //     @RequestParam("file") MultipartFile file) throws IOException{
+    //         //var dto = playlistService.update;
+    //     }
+    
+    @DeleteMapping("/{id}/removeSong/{song_id}")
+    public ResponseEntity<PlaylistDetailDto> removeSongFromPlaylist(@AuthenticationPrincipal CustomUserPrincipal me,@PathVariable("id") int id, @PathVariable("song_id") int song_id) throws Exception {
         try{
-            Playlist playlist1 = playlistService.removeSong(song_id, email);
-            playlistRepo.save(playlist1);
-            return ResponseEntity.ok(playlist1);
+            var dto = playlistTrackService.removeSongFromPlaylist(me.getId(), id, song_id);
+            return ResponseEntity.ok().body(dto);
         } catch (Exception e) {
             throw new Exception("Song name: " + song_id + "could not be found");
         }
@@ -71,41 +112,43 @@ public class PlaylistController {
     }
 
     @Transactional
-    @GetMapping(value = "/getSongs")
-    public ResponseEntity<List<Song>> getSongs(@RequestParam("email") String email) throws Exception {
+    @GetMapping(value = "/{id}")
+    public PlaylistDetailDto getSongs(@PathVariable("id") int id,@AuthenticationPrincipal CustomUserPrincipal me) throws Exception {
         try{
-            List<Song> str1 = playlistService.getSongs(email);
-            return ResponseEntity.ok(str1);
+            Integer viewerId = null;
+            viewerId = userRepo.findById(me.getId()).map(User::getId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,"Viewer email not found"));
+            return playlistTrackService.viewPlaylist(viewerId, false, id);
         } catch (Exception e) {
-            throw new Exception("Could not find user with email: " + email);
+            throw new Exception("Could not find user with username: " + me.getUsername());
         }
 
     }
 
-
+    @GetMapping("/users/{id}/playlists/with-songs")
+    public List<PlaylistDetailDto> userPlaylistsWithSongs(@PathVariable int id,
+      @AuthenticationPrincipal CustomUserPrincipal me) {
+    Integer viewerId = (me.getEmail() == null || me.getEmail().isBlank())
+        ? null
+        : userRepo.findByEmail(me.getEmail()).map(User::getId).orElse(null);
+    return playlistTrackService.listUserPlaylistsWithSongs(viewerId, false, id);
+  }
     //RENAME
 
-    @Transactional
-    @PostMapping("/rename")
-    public ResponseEntity<String> renamePlaylist(@RequestParam("email") String email, @RequestParam("playlist_name") String playlist_name) throws UserException, PlaylistException {
-        String str3 = playlistService.renamePlaylist(email,playlist_name);
-        return ResponseEntity.ok(str3);
-    }
     // CLEAR
 
     @Transactional
-    @DeleteMapping("/clear")
-    public ResponseEntity<Playlist> clearPlaylist(@RequestParam("email") String email) throws UserException {
-        Playlist str3 = playlistService.clearPlaylist(email);
-        return ResponseEntity.ok(str3);
+    @DeleteMapping("/{id}/clear")
+    public ResponseEntity<PlaylistDto> clearPlaylist(@PathVariable("id") int id,@AuthenticationPrincipal CustomUserPrincipal me) throws UserException {
+        var dto = playlistService.clearPlaylist(me.getUsername(),id);
+        return ResponseEntity.ok().body(dto);
     }
 
     // GET A PLAYLIST
 
     @Transactional
-    @GetMapping("/getPlaylistName")
-    public ResponseEntity<String> getPlaylistName(@RequestParam("email") String email) throws UserException, PlaylistException {
-        String str1 = playlistService.getPlaylistName(email);
+    @GetMapping("/{id}/getPlaylistName")
+    public ResponseEntity<String> getPlaylistName(@PathVariable("id") int id,@AuthenticationPrincipal CustomUserPrincipal me) throws UserException, PlaylistException {
+        String str1 = playlistService.getPlaylistName(me.getUsername(), id);
         return ResponseEntity.ok(str1);
     }
 

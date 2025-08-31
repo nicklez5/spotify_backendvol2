@@ -1,27 +1,37 @@
 package com.spotify11.demo.controller;
 
+import com.spotify11.demo.dtos.CreatePlaylistDto;
 import com.spotify11.demo.dtos.LoginUserDto;
+import com.spotify11.demo.dtos.MeDto;
+import com.spotify11.demo.dtos.PlaylistDto;
 import com.spotify11.demo.dtos.RegisterUserDto;
+import com.spotify11.demo.dtos.UserPublicDto;
 import com.spotify11.demo.entity.User;
 import com.spotify11.demo.exception.UserException;
+import com.spotify11.demo.repo.PlaylistRepo;
 import com.spotify11.demo.repo.UserRepository;
 
 import com.spotify11.demo.response.LoginResponse;
+import com.spotify11.demo.security.CustomUserPrincipal;
 import com.spotify11.demo.services.AuthenticationService;
 import com.spotify11.demo.services.JwtService;
+import com.spotify11.demo.services.PlaylistService;
 import com.spotify11.demo.services.UserService;
 import jakarta.transaction.Transactional;
 
 import org.apache.catalina.connector.Response;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
-
+import java.net.URI;
 import java.util.List;
+import java.util.Map;
 
 @CrossOrigin
 @RestController
@@ -30,14 +40,18 @@ public class UserController {
 
     private final UserService userService;
     private final UserRepository userRepository;
+    private final PlaylistService playlistService;
+    private final PlaylistRepo playlistRepo;
     private final AuthenticationService authenticationService;
     private final JwtService jwtService;
 
-    public UserController(UserService userService, UserRepository userRepository, AuthenticationService authenticationService, JwtService jwtService) {
+    public UserController(UserService userService, PlaylistService playlistService, PlaylistRepo playlistRepo, UserRepository userRepository, AuthenticationService authenticationService, JwtService jwtService) {
         this.userService = userService;
         this.userRepository = userRepository;
         this.authenticationService = authenticationService;
         this.jwtService = jwtService;
+        this.playlistService = playlistService;
+        this.playlistRepo = playlistRepo;
     }
 
     @PostMapping("/signup")
@@ -62,16 +76,14 @@ public class UserController {
 
     }
     @GetMapping("/info")
-    public ResponseEntity<User> authenticatedUser(){
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        User currentUser = (User) authentication.getPrincipal();
-        return ResponseEntity.ok(currentUser);
+    public ResponseEntity<MeDto> me(
+        @AuthenticationPrincipal CustomUserPrincipal me) {
+    var u = userRepository.findById(me.getId()).orElseThrow();
+    return ResponseEntity.ok(new MeDto(u.getId(), u.getFullName(), u.getEmail()));
     }
-
     @GetMapping("/all")
-    public ResponseEntity<List<User>> getUsers() {
-        List<User> users = userService.getAllUser();
-        return ResponseEntity.ok(users);
+    public List<UserPublicDto> getUsers() {
+        return userService.getAllUsers();
     }
 
 
@@ -94,6 +106,27 @@ public class UserController {
     public ResponseEntity<User> readUser(@RequestParam("email") String email) throws UserException{
         User user1 = userService.readUser(email);
         return ResponseEntity.ok(user1);
+    }
+    @PostMapping("/playlists")
+    public ResponseEntity<PlaylistDto> create(@AuthenticationPrincipal CustomUserPrincipal me, @RequestBody CreatePlaylistDto dto){
+        PlaylistDto dto2 = playlistService.addPlaylist(me.getId(), dto);
+        return ResponseEntity.created(URI.create("/api/playlists/" + dto2.id())).body(dto2);
+    }
+
+    @DeleteMapping("/playlists/{playlistId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void delete(@AuthenticationPrincipal CustomUserPrincipal me, @PathVariable int playlistId) throws UserException{
+        playlistService.RemovePlaylist(me.getId(), playlistId);
+    }
+    @GetMapping("/list_of_playlists")
+    public ResponseEntity<List<PlaylistDto>> list(@AuthenticationPrincipal CustomUserPrincipal me){
+        List<PlaylistDto> dto2 = playlistService.listUserPlaylists(me.getId());
+        return ResponseEntity.ok().body(dto2);
+    }
+
+    @PatchMapping("/playlists/{playlistId}/name")
+    public PlaylistDto rename(@AuthenticationPrincipal CustomUserPrincipal me, @PathVariable int playlistId, @RequestBody Map<String, String> body) throws UserException{
+        return playlistService.rename(me.getId(), playlistId, body.get("name"));
     }
 
 

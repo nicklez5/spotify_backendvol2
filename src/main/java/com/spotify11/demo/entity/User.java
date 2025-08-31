@@ -24,7 +24,7 @@ public class User implements UserDetails {
     @Id
     @GeneratedValue(strategy = GenerationType.AUTO)
     @Column(nullable = false)
-    private int id;
+    private Integer id;
 
 
     @Column(nullable = false)
@@ -49,6 +49,9 @@ public class User implements UserDetails {
         return List.of();
     }
 
+    @Column(nullable = true)
+    private String profileImageUrl;
+    
     @Override
     public String getUsername() {
         return email;
@@ -74,12 +77,25 @@ public class User implements UserDetails {
         return true;
     }
 
-    @OneToOne(cascade = CascadeType.ALL)
-    @JoinColumn(name = "library_id")
+    @OneToOne(cascade = CascadeType.ALL, orphanRemoval = true)
+    @JoinColumn(name = "library_id",  nullable = false, unique = true)
     private Library library = new Library();
 
-    @OneToOne(cascade = CascadeType.ALL)
-    @JoinColumn(name = "playlist_id")
-    private Playlist playlist = new Playlist();
+    @OneToMany(mappedBy = "owner",
+               cascade = CascadeType.ALL,
+               orphanRemoval = true)
+    private List<Playlist> playlists = new ArrayList<>();
 
+    public void addPlaylist(Playlist p){
+        playlists.add(p);
+        p.setOwner(this);
+    }
+    public void removePlaylist(Playlist p){
+        playlists.remove(p);
+        p.setOwner(null);
+    }
+    public void attachLibrary(Library lib){
+        this.library = lib;
+        lib.setOwner(this);
+    }
 }

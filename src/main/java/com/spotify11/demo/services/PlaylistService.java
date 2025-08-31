@@ -1,29 +1,44 @@
 package com.spotify11.demo.services;
 
 
+import com.spotify11.demo.dtos.CreatePlaylistDto;
+import com.spotify11.demo.dtos.PlaylistDto;
 import com.spotify11.demo.entity.Playlist;
 
 
 import com.spotify11.demo.entity.Song;
 import com.spotify11.demo.exception.SongException;
 import com.spotify11.demo.exception.UserException;
-import jakarta.transaction.Transactional;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.security.access.AccessDeniedException;
 
+import java.io.IOException;
 import java.util.List;
+
+import jakarta.persistence.EntityNotFoundException;
+
 
 public interface PlaylistService {
 
-    String getPlaylistName(String email) throws UserException;
+    String getPlaylistName(String email, int id) throws UserException;
+
+    
     @Transactional
-    Playlist addSong(int song_id, String email) throws Exception;
-    List<Song> getSongs(String email) throws UserException;
-
+    PlaylistDto addPlaylist(Integer userId, CreatePlaylistDto dto) throws EntityNotFoundException;
 
     @Transactional
-    Playlist removeSong(int song_id, String email) throws SongException, UserException;
+    void RemovePlaylist(int userId, int playlistId) throws EntityNotFoundException, AccessDeniedException, UserException;
 
-    String renamePlaylist(String email, String playlist_name) throws UserException;
-    Playlist clearPlaylist(String email) throws UserException;
+    @Transactional
+    List<PlaylistDto> listUserPlaylists(int userId);
 
+    @Transactional
+    PlaylistDto rename(int userId, int playlistId, String newName) throws EntityNotFoundException, AccessDeniedException, UserException;
 
+    PlaylistDto updateCover(Integer ownerId, Integer playlistId, MultipartFile file) throws RuntimeException, IOException;
+
+    PlaylistDto clearPlaylist(String email, int id) throws UserException;
+
+    //PlaylistDto updateCover(Integer ownerId, Integer playlistId, MultipartFile file) throws IOException;
 }

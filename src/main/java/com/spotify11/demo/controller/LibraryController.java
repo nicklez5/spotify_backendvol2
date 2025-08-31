@@ -1,16 +1,22 @@
 package com.spotify11.demo.controller;
 
 
+import com.spotify11.demo.dtos.TrackDto;
 import com.spotify11.demo.entity.Library;
 
 import com.spotify11.demo.exception.LibraryException;
 import com.spotify11.demo.exception.SongException;
 import com.spotify11.demo.exception.UserException;
+import com.spotify11.demo.security.CustomUserPrincipal;
 import com.spotify11.demo.services.LibraryService;
 import com.spotify11.demo.services.SongService;
 
 import jakarta.transaction.Transactional;
+
+import java.util.List;
+
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 @CrossOrigin
@@ -28,33 +34,22 @@ public class LibraryController {
 
 
 
-    @Transactional
-    @PostMapping("/addSong/{id}")
-    public ResponseEntity<Library> addSong(@RequestParam("title") String title, @RequestParam("email") String email) throws SongException, UserException {
-        Library lib1 = libraryService.addSong(this.songService.getSong(title,email), email);
-        return ResponseEntity.ok(lib1);
-
+    @PostMapping("/songs/{songId}")
+    public ResponseEntity<Void> add(@AuthenticationPrincipal CustomUserPrincipal me,
+                                    @PathVariable Integer songId) {
+        libraryService.addExistingSong(me.getId(), songId);
+        return ResponseEntity.noContent().build();
     }
-    @Transactional
-    @DeleteMapping("/deleteSong/{id}")
-    public ResponseEntity<Library> deleteSong(@PathVariable("id") int id, @RequestParam("email") String email) throws SongException, UserException {
-        Library lib1 = libraryService.deleteSong(this.songService.getSong(id,email), email);
-        return ResponseEntity.ok(lib1);
-
-
+    @DeleteMapping("/songs/{songId}")
+    public ResponseEntity<Void> remove(@AuthenticationPrincipal CustomUserPrincipal me,
+                                        @PathVariable Integer songId) {
+        libraryService.removeSong(me.getId(), songId);
+        return ResponseEntity.noContent().build();
     }
 
-    @Transactional
-    @GetMapping("/info")
-    public ResponseEntity<Library> getLibrary(@RequestParam("email") String email) throws  LibraryException {
-        Library lib1 = libraryService.getLibrary(email);
-        return ResponseEntity.ok(lib1);
-    }
-    @Transactional
-    @DeleteMapping("/clear")
-    public ResponseEntity<Library> clearLibrary(@RequestParam("email") String email) throws  LibraryException {
-        Library lib1 =  libraryService.clearLibrary(email);
-        return ResponseEntity.ok(lib1);
+    @GetMapping("/songs")
+    public List<TrackDto> list(@AuthenticationPrincipal CustomUserPrincipal me) {
+        return libraryService.list(me.getId());
     }
 
 }

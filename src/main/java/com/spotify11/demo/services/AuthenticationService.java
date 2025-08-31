@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 import com.spotify11.demo.dtos.LoginUserDto;
 import com.spotify11.demo.dtos.RegisterUserDto;
 import com.spotify11.demo.entity.User;
+import com.spotify11.demo.repo.LibraryRepo;
 import com.spotify11.demo.repo.UserRepository;
 
 import java.util.ArrayList;
@@ -22,15 +23,18 @@ public class AuthenticationService {
     private final PasswordEncoder passwordEncoder;
 
     private final AuthenticationManager authenticationManager;
+    private final LibraryRepo libraryRepo;
 
     public AuthenticationService(
             UserRepository userRepository,
             AuthenticationManager authenticationManager,
-            PasswordEncoder passwordEncoder
+            PasswordEncoder passwordEncoder,
+            LibraryRepo libraryRepo
     ) {
         this.authenticationManager = authenticationManager;
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
+        this.libraryRepo = libraryRepo;
     }
 
     public User signup(RegisterUserDto input) {
@@ -38,11 +42,14 @@ public class AuthenticationService {
         user.setFullName(input.getFullName());
         user.setEmail(input.getEmail());
         user.setPassword(passwordEncoder.encode(input.getPassword()));
-        Library xyz3 = new Library();
-        user.setLibrary(xyz3);
-        Playlist xy3 = new Playlist();
-        xyz3.setSongs(new ArrayList<>());
-        user.setPlaylist(xy3);
+        Library lib = new Library();
+        user.setLibrary(lib);
+        lib.setOwner(user);
+
+        Playlist p = new Playlist();
+
+        p.setPlaylistName("My first playlist");
+        user.addPlaylist(p);
         return userRepository.save(user);
     }
 

@@ -2,6 +2,7 @@ package com.spotify11.demo.services;
 
 import com.spotify11.demo.dtos.LoginUserDto;
 import com.spotify11.demo.dtos.RegisterUserDto;
+import com.spotify11.demo.dtos.UserPublicDto;
 import com.spotify11.demo.entity.*;
 
 
@@ -26,7 +27,8 @@ public class UserImpl implements UserService {
     @Autowired
     private UserRepository userRepo;
 
-
+    @Autowired
+    private PlaylistRepo playlistRepo;
 
     private final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder(12);
 
@@ -47,13 +49,10 @@ public class UserImpl implements UserService {
     }
 
     @Transactional
-    public List<User> getAllUser() {
-        Iterator<User> xyz = this.userRepo.findAll().iterator();
-        List<User> users = new ArrayList<>();
-        while (xyz.hasNext()) {
-            users.add(xyz.next());
-        }
-        return users;
+    public List<UserPublicDto> getAllUsers() {
+        return userRepo.findAll().stream()
+            .map(u -> UserPublicDto.from(u, (int) playlistRepo.countByOwnerId(u.getId())))
+            .toList();
 
     }
 

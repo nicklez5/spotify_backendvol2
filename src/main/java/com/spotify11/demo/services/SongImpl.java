@@ -1,6 +1,10 @@
 package com.spotify11.demo.services;
 
+import com.spotify11.demo.dtos.CreateSongDto;
+import com.spotify11.demo.dtos.SongDto;
+import com.spotify11.demo.dtos.TrackDto;
 import com.spotify11.demo.entity.Song;
+import com.spotify11.demo.entity.UploadStatus;
 import com.spotify11.demo.entity.User;
 import com.spotify11.demo.exception.FileStorageException;
 import com.spotify11.demo.exception.MentionedFileNotFoundException;
@@ -12,9 +16,12 @@ import com.spotify11.demo.repo.SongRepo;
 import com.spotify11.demo.repo.UserRepository;
 import com.spotify11.demo.utilites.Functions;
 import jakarta.transaction.Transactional;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.presigner.S3Presigner;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
 import org.springframework.stereotype.Service;
@@ -28,6 +35,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.List;
+import java.util.Map;
 
 @Service
 public class SongImpl implements SongService {
@@ -35,18 +43,26 @@ public class SongImpl implements SongService {
     private static final Logger log = LoggerFactory.getLogger(SongImpl.class);
 
     private final UserRepository userRepo;
-
-
-
+    private final S3Client s3;
     private final SongRepo songRepo;
-
+    private final S3Presigner presigner;
     public Functions functions;
     private final Path fileStorageLocation;
 
+    @Value("${app.s3.bucket}")
+    private String bucket;
 
-    public SongImpl(UserRepository userRepo, SongRepo songRepo,FileStorageProperties fileStorageProperties) throws IOException {
+    @Value("${app.s3.public-urls:false}")
+    private boolean usePublicUrls;
+    
+    @Value("${app.cdn.domain:}")
+    private String cdnDomain;
+
+    public SongImpl(UserRepository userRepo, SongRepo songRepo,FileStorageProperties fileStorageProperties, S3Client s3, S3Presigner presigner) throws IOException {
         this.songRepo = songRepo;
         this.userRepo = userRepo;
+        this.s3 = s3;
+        this.presigner = presigner;
         this.functions = new Functions();
         this.fileStorageLocation = Paths.get(fileStorageProperties.getUploadDir()).toAbsolutePath().normalize();
         try{
@@ -59,107 +75,138 @@ public class SongImpl implements SongService {
 
     }
 
-    @Transactional
     @Override
-    public Song createSong(String title, String artist, String email, MultipartFile file123) throws Exception {
-        if (userRepo.findByEmail(email).isPresent()) {
+    public SongDto create(Integer ownerId, CreateSongDto dto){
+        Song s = new Song();
+        s.setOwnerId(ownerId);
+        s.setTitle(dto.title());
+        s.setArtist(dto.artist());
+        s.setStatus(UploadStatus.PENDING);
+        songRepo.save(s);
+        return SongDto.from(s,null);
+    }
 
+      public TrackDto toTrackDto(Song s, Integer ownerId) {
+        String url = null;
 
-
-            User user = userRepo.findByEmail(email).get();
-            String fileName = file123.getOriginalFilename();
-            Path targetLocation = fileStorageLocation.resolve(fileName);
-            Files.copy(file123.getInputStream(), targetLocation, StandardCopyOption.REPLACE_EXISTING);
-            String fileDownloadUri = ServletUriComponentsBuilder.fromCurrentContextPath()
-                    .path("/songs/download/" + fileName)
-                    .build()
-                    .toUriString();
-
-
-            Song song123 = new Song(title,artist,fileDownloadUri);
-            user.getLibrary().addSong(song123, email);
-            songRepo.save(song123);
-
-            return song123;
-
-        }else{
-            throw new UserException("User not found");
+        if (s.getStatus() == UploadStatus.READY && s.getS3Key() != null) {
+        if (usePublicUrls) {
+            // public (or CloudFront) path
+            String base = (cdnDomain != null && !cdnDomain.isBlank())
+                ? "https://" + cdnDomain + "/"
+                : "https://" + bucket + ".s3.amazonaws.com/";
+            url = base + s.getS3Key();
+        } else {
+            // private bucket → presign via your new helper
+            url = presignedGet(ownerId, s.getId());
+        }
         }
 
+        return TrackDto.from(s, url);
+    }
+
+
+    public SongDto finalizeUpload(Integer ownerId, Integer songId, Long sizeBytes) {
+        Song s = songRepo.findByIdAndOwnerId(songId, ownerId)
+            .orElseThrow(() -> new RuntimeException("Song not found"));
+        if (s.getS3Key() == null) throw new RuntimeException("No upload in progress");
+
+        // optional: check object exists in S3 (HeadObject)
+        try {
+        s3.headObject(b -> b.bucket(bucket).key(s.getS3Key()));
+        } catch (Exception ex) {
+        s.setStatus(UploadStatus.FAILED);
+        songRepo.save(s);
+        throw new RuntimeException("Object not found in S3; upload failed");
+        }
+
+        s.setSizeBytes(sizeBytes);
+        s.setStatus(UploadStatus.READY);
+        songRepo.save(s);
+
+        // If public bucket/CloudFront, build a public URL; otherwise return null here and presign GET when needed
+        String url = "https://" + bucket + ".s3.amazonaws.com/" + s.getS3Key();
+        return SongDto.from(s, url);
+    }
+    @Override
+    public Map<String, String> presignUpload(Integer ownerId, Integer songId, String contentType){
+        Song s = songRepo.findByIdAndOwnerId(songId, ownerId)
+        .orElseThrow(() -> new RuntimeException("Song not found"));
+
+        if (contentType == null || !contentType.startsWith("audio/")) {
+        throw new RuntimeException("Only audio uploads allowed");
+        }
+
+        String key = "users/%d/songs/%d/%s".formatted(ownerId, songId, java.util.UUID.randomUUID());
+
+        var put = software.amazon.awssdk.services.s3.model.PutObjectRequest.builder()
+            .bucket(bucket)
+            .key(key)
+            .contentType(contentType)
+            .build();
+
+        var presigned = presigner.presignPutObject(p -> p
+            .putObjectRequest(put)
+            .signatureDuration(java.time.Duration.ofMinutes(15)));
+
+        // Remember the key & mark uploading
+        s.setS3Key(key);
+        s.setContentType(contentType);
+        s.setStatus(UploadStatus.UPLOADING);
+        songRepo.save(s);
+
+        return Map.of("url", presigned.url().toString(), "key", key);
+    }
+
+    public String presignedGet(Integer ownerId, Integer songId) {
+        Song s = songRepo.findByIdAndOwnerId(songId, ownerId)
+            .orElseThrow(() -> new RuntimeException("Song not found"));
+        if (s.getS3Key() == null) throw new RuntimeException("Song has no storage key");
+
+        var getReq = software.amazon.awssdk.services.s3.model.GetObjectRequest.builder()
+            .bucket(bucket).key(s.getS3Key()).build();
+        var pres = presigner.presignGetObject(b -> b
+            .getObjectRequest(getReq)
+            .signatureDuration(java.time.Duration.ofMinutes(10)));
+        return pres.url().toString();
     }
 
 
 
-    @Transactional
-    @Override
-    public Song updateSong(String title, String artist, int song_id, String email) throws UserException {
-
-            User user = userRepo.findByEmail(email).get();
-            List<Song> xyz = user.getLibrary().getSongs();
-            for (Song song : xyz) {
-                if (song.getId() == song_id) {
-                    song.setArtist(artist);
-                    song.setTitle(title);
-                    songRepo.save(song);
-                    return song;
-                }
-            }
 
 
-        return null;
+
+   
+
+    public void deleteSong(Integer ownerId, Integer songId) {
+        Song s = songRepo.findByIdAndOwnerId(songId, ownerId)
+            .orElseThrow(() -> new RuntimeException("Song not found"));
+
+        String key = s.getS3Key();
+
+        // 1) Delete the object in S3 (safe/idempotent)
+        safeDeleteS3(key);
+
+        // 2) Remove DB relationships if you have many-to-many links (optional)
+        // playlistSongRepo.deleteBySongId(songId); // example if you have a join table
+
+        // 3) Delete the row
+        songRepo.delete(s);
     }
-
-
-
-    @Transactional
-    @Override
-    public Resource loadFileAsResource(String fileName) throws MentionedFileNotFoundException, FileNotFoundException {
-        try{
-            Path filePath = Path.of(Functions.basePath + File.separator + fileName);
-            Resource resource = new UrlResource(filePath.toUri());
-            if(resource.exists()){
-                return resource;
-            }else{
-                throw new FileNotFoundException("File not found " + fileName);
-            }
-        }catch(MalformedURLException | FileNotFoundException ex){
-            throw new FileNotFoundException("File not found" + fileName);
+    private void safeDeleteS3(String key) {
+        if (key == null || key.isBlank()) return;
+        try {
+        s3.deleteObject(b -> b.bucket(bucket).key(key));
+        } catch (software.amazon.awssdk.services.s3.model.S3Exception e) {
+        // Ignore "NoSuchKey" (already gone); rethrow others
+        String code = e.awsErrorDetails() != null ? e.awsErrorDetails().errorCode() : "";
+        if (!"NoSuchKey".equals(code)) {
+            throw e;
+        }
         }
     }
 
-    @Override
-    public File multipartFile(MultipartFile file, String fileName) throws IOException {
-        Path filePath = Path.of(Functions.basePath + File.separator + fileName);
-        File convFile = new File(filePath.toUri());
-        file.transferTo(convFile);
-        return convFile;
-    }
-
-
-
-    @Transactional
-    @Override
-    public String deleteSong(int song_id, String email) throws SongException {
-
-            if(userRepo.findByEmail(email).isPresent()){
-                User user = userRepo.findByEmail(email).get();
-                List<Song> xyz = user.getLibrary().getSongs();
-                for (Song song : xyz) {
-                    if (song.getId() == song_id) {
-                        user.getLibrary().removeSong(song);
-                        songRepo.delete(song);
-
-                        return String.valueOf(song_id);
-                    }
-                }
-            }else{
-                throw new SongException("Song cant be foundexist");
-            }
-        return null;
-
-
-    }
-
+    
 
     public Song getSong(int song_id, String email) throws SongException {
         if (userRepo.findByEmail(email).isPresent()) {
@@ -197,5 +244,10 @@ public class SongImpl implements SongService {
         User user = userRepo.findByEmail(email).get();
         List<Song> xyz = user.getLibrary().getSongs();
         return xyz;
+    }
+    @Override
+    public List<TrackDto> listTracksForPlaylist(Integer ownerId, Integer playlistId) {
+        List<Song> songs = songRepo.findByPlaylistAndOwner(playlistId, ownerId);
+        return songs.stream().map(s -> toTrackDto(s, ownerId)).toList();
     }
 }

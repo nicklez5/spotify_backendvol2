@@ -34,7 +34,13 @@ public class JwtService {
     }
 
     public String generateToken(UserDetails userDetails) {
-        return generateToken(new HashMap<>(), userDetails);
+        Map<String,Object> claims = new HashMap<>();
+        if(userDetails instanceof com.spotify11.demo.entity.User u){
+            claims.put("uid", u.getId());
+            claims.put("name",u.getFullName());
+            claims.put("email",u.getEmail());
+        }
+        return generateToken(claims, userDetails);
     }
 
     public String generateToken(Map<String, Object> extraClaims, UserDetails userDetails) {
@@ -73,7 +79,7 @@ public class JwtService {
         return extractClaim(token, Claims::getExpiration);
     }
 
-    private Claims extractAllClaims(String token) {
+    public Claims extractAllClaims(String token) {
         return Jwts
                 .parserBuilder()
                 .setSigningKey(getSignInKey())
