@@ -49,13 +49,18 @@ public class LibraryImpl implements LibraryService {
     }
 
      public void addExistingSong(Integer ownerId, Integer songId) {
-        var lib = getOrCreateLibrary(ownerId);
-        var song = songRepo.findByIdAndOwnerId(songId, ownerId)
+         Library lib = libraryRepo.findByOwnerIdFetchSongs(ownerId)   // see repo below
+            .orElseGet(() -> {
+            Library l = new Library();
+            l.setOwner(userRepo.getReferenceById(ownerId));
+            return libraryRepo.save(l);
+        });
+        Song song = songRepo.findByIdAndOwnerId(songId, ownerId)
             .orElseThrow(() -> new RuntimeException("Song not found or not yours"));
+        
         // attach
-        lib.addSong(song);       // keeps both sides consistent
+        lib.getSongs().add(song);       // keeps both sides consistent
         // because of cascade on Library.songs, saving lib is enough
-        libraryRepo.save(lib);
     }
      public Song createAndAttach(Integer ownerId, String title, String artist) {
         var lib = getOrCreateLibrary(ownerId);
@@ -68,14 +73,14 @@ public class LibraryImpl implements LibraryService {
         return s;
     }
     public void removeSong(Integer ownerId, Integer songId) {
-        var lib = libraryRepo.findByOwnerId(ownerId)
-            .orElseThrow(() -> new RuntimeException("Library not found"));
-        var song = songRepo.findByIdAndOwnerId(songId, ownerId)
-            .orElseThrow(() -> new RuntimeException("Song not found"));
-        lib.removeSong(song);
-        libraryRepo.save(lib);
-        // If orphanRemoval=true -> the Song row is deleted automatically.
-        // If orphanRemoval=false -> the Song row remains with library_id null.
+         Library lib = libraryRepo.findByOwnerId(ownerId)
+        .orElseThrow(() -> new RuntimeException("Library not found"));
+
+        Song song = songRepo.findByIdAndOwnerId(songId, ownerId)
+            .orElseThrow(() -> new RuntimeException("Song not found or not yours"));
+
+        lib.getSongs().remove(song);        // collection is initialized
+        song.setLibrary(null); 
     }
 
     public List<TrackDto> list(Integer ownerId) {

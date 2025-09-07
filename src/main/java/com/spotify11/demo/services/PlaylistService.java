@@ -7,6 +7,7 @@ import com.spotify11.demo.entity.Playlist;
 
 
 import com.spotify11.demo.entity.Song;
+import com.spotify11.demo.enums.Visibility;
 import com.spotify11.demo.exception.SongException;
 import com.spotify11.demo.exception.UserException;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,13 +24,18 @@ public interface PlaylistService {
 
     String getPlaylistName(String email, int id) throws UserException;
 
+    String getPlaylistDescription(String email, int id) throws UserException;
     
     @Transactional
     PlaylistDto addPlaylist(Integer userId, CreatePlaylistDto dto) throws EntityNotFoundException;
+    
+    @Transactional
+    PlaylistDto renameDescription(int userId, int playlistId, String newDescription) throws UserException;
 
     @Transactional
     void RemovePlaylist(int userId, int playlistId) throws EntityNotFoundException, AccessDeniedException, UserException;
-
+    @Transactional
+    PlaylistDto changeVisibility(Integer ownerId, Integer playlistId, Visibility str1) throws RuntimeException, EntityNotFoundException;
     @Transactional
     List<PlaylistDto> listUserPlaylists(int userId);
 

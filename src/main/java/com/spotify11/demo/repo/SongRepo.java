@@ -5,6 +5,7 @@ import com.spotify11.demo.entity.Song;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.CrudRepository;
 import org.springframework.data.repository.query.Param;
@@ -29,4 +30,13 @@ public interface SongRepo extends JpaRepository<Song,Integer> {
                                       @Param("ownerId") Integer ownerId);
     List<Song> findAllByLibrary_Id(Integer libraryId);
     List<Song> findByLibraryOwnerId(Integer ownerId);
+
+    @Query("""
+    select s from Song s
+    where s.library.id = :libId
+    order by s.id desc
+    """)
+    List<Song> findByLibraryId(Integer libId);
+
+     
 }

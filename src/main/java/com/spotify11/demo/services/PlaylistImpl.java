@@ -5,7 +5,7 @@ import com.spotify11.demo.dtos.PlaylistDto;
 import com.spotify11.demo.entity.Playlist;
 import com.spotify11.demo.entity.Song;
 import com.spotify11.demo.entity.User;
-
+import com.spotify11.demo.enums.Visibility;
 import com.spotify11.demo.exception.SongException;
 import com.spotify11.demo.exception.UserException;
 import com.spotify11.demo.repo.LibraryRepo;
@@ -54,6 +54,7 @@ public class PlaylistImpl implements PlaylistService {
         this.s3 = s3;
     }
 
+
     @Override
     public String getPlaylistName(String email, int id) throws UserException {
         if(userRepo.findByEmail(email).isPresent()){
@@ -65,7 +66,18 @@ public class PlaylistImpl implements PlaylistService {
         }
     }
 
-
+    
+    @Override
+    public String getPlaylistDescription(String email, int id) throws UserException {
+        if(userRepo.findByEmail(email).isPresent()){
+            User user = userRepo.findByEmail(email).get();
+            Playlist p = playlistRepo.findByIdAndOwnerId(id,user.getId()).orElseThrow(() -> new UserException("Playlist not found"));
+            return p.getDescription();
+        }else{
+            throw new UserException("you are not present my lord:" + email);
+        }
+    }
+    
 
     @Transactional
     @Override
@@ -95,6 +107,7 @@ public class PlaylistImpl implements PlaylistService {
             .orElseThrow(() -> new EntityNotFoundException("User not found"));
         Playlist p = new Playlist();
         p.setPlaylistName(dto.name());
+        p.setDescription(dto.description());
         p.setOwner(user);
         user.getPlaylists().add(p);
         Playlist saved = playlistRepo.save(p);
@@ -104,6 +117,14 @@ public class PlaylistImpl implements PlaylistService {
     }
 
 
+    @Override
+    public PlaylistDto changeVisibility(Integer ownerId, Integer playlistId, Visibility str1) throws RuntimeException, EntityNotFoundException{
+        Playlist p = playlistRepo.findByIdAndOwnerId(playlistId, ownerId)
+        .orElseThrow(() -> new RuntimeException("Playlist not found"));
+        p.setVisibility(str1);
+        playlistRepo.save(p);
+        return PlaylistDto.from(p);
+    }
     @Override
     public PlaylistDto updateCover(Integer ownerId, Integer playlistId, MultipartFile file) throws RuntimeException, IOException{
         Playlist p = playlistRepo.findByIdAndOwnerId(playlistId, ownerId)
@@ -128,7 +149,7 @@ public class PlaylistImpl implements PlaylistService {
                     RequestBody.fromBytes(file.getBytes()));
 
         // if you want public read, either set a CloudFront URL or use the S3 website/virtual-host URL:
-        String url = "https://%s.s3.amazonaws.com/%s".formatted(bucket, key);
+       var url = s3.utilities().getUrl(b -> b.bucket(bucket).key(key)).toExternalForm();
 
         p.setCoverKey(key);
         p.setCoverUrl(url);
@@ -146,6 +167,15 @@ public class PlaylistImpl implements PlaylistService {
         return PlaylistDto.from(p);
     }
 
+    @Transactional
+    @Override
+    public PlaylistDto renameDescription(int userId, int playlistId, String newDescription) throws UserException{
+        Playlist p = playlistRepo.findByIdAndOwnerId(playlistId, userId).orElseThrow(() -> new UserException("Playlist not found"));
+        if(!Objects.equals(p.getOwner().getId(),userId))
+            throw new AccessDeniedException("Not the owner");
+        p.setDescription(newDescription);
+        return PlaylistDto.from(p);
+    }
     @Transactional
     @Override
     public PlaylistDto clearPlaylist(String email, int id) throws UserException {

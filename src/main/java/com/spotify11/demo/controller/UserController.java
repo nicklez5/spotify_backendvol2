@@ -1,10 +1,12 @@
 package com.spotify11.demo.controller;
 
+import com.spotify11.demo.dtos.AuthResponse;
 import com.spotify11.demo.dtos.CreatePlaylistDto;
 import com.spotify11.demo.dtos.LoginUserDto;
 import com.spotify11.demo.dtos.MeDto;
 import com.spotify11.demo.dtos.PlaylistDto;
 import com.spotify11.demo.dtos.RegisterUserDto;
+import com.spotify11.demo.dtos.TrackDto;
 import com.spotify11.demo.dtos.UserPublicDto;
 import com.spotify11.demo.entity.User;
 import com.spotify11.demo.exception.UserException;
@@ -16,6 +18,7 @@ import com.spotify11.demo.security.CustomUserPrincipal;
 import com.spotify11.demo.services.AuthenticationService;
 import com.spotify11.demo.services.JwtService;
 import com.spotify11.demo.services.PlaylistService;
+import com.spotify11.demo.services.SongService;
 import com.spotify11.demo.services.UserService;
 import jakarta.transaction.Transactional;
 
@@ -42,22 +45,25 @@ public class UserController {
     private final UserRepository userRepository;
     private final PlaylistService playlistService;
     private final PlaylistRepo playlistRepo;
+    private final SongService songService;
     private final AuthenticationService authenticationService;
     private final JwtService jwtService;
 
-    public UserController(UserService userService, PlaylistService playlistService, PlaylistRepo playlistRepo, UserRepository userRepository, AuthenticationService authenticationService, JwtService jwtService) {
+    public UserController(UserService userService, SongService songService,PlaylistService playlistService, PlaylistRepo playlistRepo, UserRepository userRepository, AuthenticationService authenticationService, JwtService jwtService) {
         this.userService = userService;
         this.userRepository = userRepository;
         this.authenticationService = authenticationService;
         this.jwtService = jwtService;
         this.playlistService = playlistService;
         this.playlistRepo = playlistRepo;
+        this.songService = songService;
     }
 
     @PostMapping("/signup")
-    public ResponseEntity<User> register(@RequestBody RegisterUserDto registerUserDto) {
-        User registeredUser = authenticationService.signup(registerUserDto);
-        return ResponseEntity.ok(registeredUser);
+    public ResponseEntity<AuthResponse> register(@RequestBody RegisterUserDto registerUserDto) {
+        User user = authenticationService.signup(registerUserDto);
+        var body = new AuthResponse(user.getId(), user.getFullName(), user.getEmail(), null );
+        return ResponseEntity.ok().body(body);
     }
 
     @PostMapping("/login")
@@ -79,7 +85,7 @@ public class UserController {
     public ResponseEntity<MeDto> me(
         @AuthenticationPrincipal CustomUserPrincipal me) {
     var u = userRepository.findById(me.getId()).orElseThrow();
-    return ResponseEntity.ok(new MeDto(u.getId(), u.getFullName(), u.getEmail()));
+    return ResponseEntity.ok(new MeDto(u.getId(), u.getFullName(), u.getEmail(), u.getProfileImageUrl()));
     }
     @GetMapping("/all")
     public List<UserPublicDto> getUsers() {
@@ -89,8 +95,8 @@ public class UserController {
 
     @Transactional
     @PutMapping("/update")
-    public ResponseEntity<User> updateUser(@RequestParam("username") String username,@RequestParam("password") String user_password, @RequestParam("email") String user_email) throws UserException {
-        User user1 =  userService.updateUser(username,user_password,user_email);
+    public ResponseEntity<User> updateUser(@RequestParam("fullName") String fullName,@RequestParam("password") String user_password, @RequestParam("email") String user_email) throws UserException {
+        User user1 =  userService.updateUser(fullName,user_password,user_email);
         return ResponseEntity.ok(user1);
     }
 
@@ -107,6 +113,11 @@ public class UserController {
         User user1 = userService.readUser(email);
         return ResponseEntity.ok(user1);
     }
+    @GetMapping("/tracks")
+    public List<TrackDto> tracks(@AuthenticationPrincipal CustomUserPrincipal me
+                             ) throws UserException {
+    return songService.getAllSongs(me.getEmail());
+    }
     @PostMapping("/playlists")
     public ResponseEntity<PlaylistDto> create(@AuthenticationPrincipal CustomUserPrincipal me, @RequestBody CreatePlaylistDto dto){
         PlaylistDto dto2 = playlistService.addPlaylist(me.getId(), dto);
@@ -122,6 +133,11 @@ public class UserController {
     public ResponseEntity<List<PlaylistDto>> list(@AuthenticationPrincipal CustomUserPrincipal me){
         List<PlaylistDto> dto2 = playlistService.listUserPlaylists(me.getId());
         return ResponseEntity.ok().body(dto2);
+    }
+    @GetMapping("/{id}/list_of_playlists")
+    public ResponseEntity<List<PlaylistDto>> list_from_users(@PathVariable Integer id){
+        List<PlaylistDto> dto3 = playlistService.listUserPlaylists(id);
+        return ResponseEntity.ok().body(dto3);
     }
 
     @PatchMapping("/playlists/{playlistId}/name")

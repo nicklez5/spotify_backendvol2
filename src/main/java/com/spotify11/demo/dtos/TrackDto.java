@@ -10,6 +10,7 @@ public record TrackDto(
     String streamUrl,     // presigned GET or public URL; may be null if not READY
     Long sizeBytes,
     String contentType,
+    Integer durationSec,
     UploadStatus status
 ) {
   public static TrackDto from(Song s, String streamUrl) {
@@ -20,6 +21,7 @@ public record TrackDto(
         streamUrl,                 // pass in computed URL (or null)
         s.getSizeBytes(),
         s.getContentType(),
+        s.getDurationSec(),
         s.getStatus()
     );
   }

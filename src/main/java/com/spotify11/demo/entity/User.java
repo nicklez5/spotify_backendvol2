@@ -12,18 +12,24 @@ import org.hibernate.annotations.UpdateTimestamp;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
-@Data
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
+
 @Entity
 @AllArgsConstructor
 @NoArgsConstructor
 @Setter
 @Getter
 @Table(name = "users")
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
+@ToString(onlyExplicitlyIncluded = true)
 public class User implements UserDetails {
 
     @Id
     @GeneratedValue(strategy = GenerationType.AUTO)
     @Column(nullable = false)
+    @EqualsAndHashCode.Include
+    @ToString.Include
     private Integer id;
 
 
@@ -51,7 +57,7 @@ public class User implements UserDetails {
 
     @Column(nullable = true)
     private String profileImageUrl;
-    
+
     @Override
     public String getUsername() {
         return email;
@@ -77,25 +83,30 @@ public class User implements UserDetails {
         return true;
     }
 
-    @OneToOne(cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToOne(fetch = FetchType.LAZY,cascade = CascadeType.ALL, orphanRemoval = true)
     @JoinColumn(name = "library_id",  nullable = false, unique = true)
+    @JsonIgnore
     private Library library = new Library();
 
     @OneToMany(mappedBy = "owner",
                cascade = CascadeType.ALL,
                orphanRemoval = true)
+    @JsonIgnore
     private List<Playlist> playlists = new ArrayList<>();
 
     public void addPlaylist(Playlist p){
-        playlists.add(p);
-        p.setOwner(this);
+        if (p == null) return;
+        if (!playlists.contains(p)) playlists.add(p);
+        if (p.getOwner() != this) p.setOwner(this);
     }
     public void removePlaylist(Playlist p){
+        if (p == null) return;
         playlists.remove(p);
-        p.setOwner(null);
+        if (p.getOwner() == this) p.setOwner(null);
     }
     public void attachLibrary(Library lib){
+        if (this.library == lib) return;
         this.library = lib;
-        lib.setOwner(this);
+        if (lib != null && lib.getOwner() != this) lib.setOwner(this);
     }
 }

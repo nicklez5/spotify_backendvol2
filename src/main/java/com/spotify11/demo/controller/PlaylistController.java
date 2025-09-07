@@ -3,10 +3,12 @@ package com.spotify11.demo.controller;
 import com.spotify11.demo.dtos.PlaylistDetailDto;
 import com.spotify11.demo.dtos.PlaylistDto;
 import com.spotify11.demo.dtos.TrackDto;
+import com.spotify11.demo.dtos.UpdateVisibilityDto;
 import com.spotify11.demo.entity.Playlist;
 import com.spotify11.demo.entity.Song;
 
 import com.spotify11.demo.entity.User;
+import com.spotify11.demo.enums.Visibility;
 import com.spotify11.demo.exception.PlaylistException;
 
 import com.spotify11.demo.exception.UserException;
@@ -31,6 +33,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 
 @CrossOrigin
 @RestController
@@ -50,7 +53,13 @@ public class PlaylistController {
         this.songService = songService;
     }
 
-
+    @Transactional
+    @PatchMapping("/{id}/makeprivate")
+    public ResponseEntity<PlaylistDto> setPrivate(@AuthenticationPrincipal CustomUserPrincipal me, @PathVariable("id") int id, @RequestBody UpdateVisibilityDto dto){
+        var dto2 = playlistService.changeVisibility(me.getId(), id, dto.visibility() );
+        
+        return ResponseEntity.ok().body(dto2);
+    }
     @Transactional
     @GetMapping("/{id}/info")
     public ResponseEntity<PlaylistDto> getPlaylist(@AuthenticationPrincipal CustomUserPrincipal me, @PathVariable("id") int id){
@@ -68,13 +77,8 @@ public class PlaylistController {
     @Transactional
     @PostMapping("/{id}/addSong/{song_id}")
     public ResponseEntity<PlaylistDetailDto> addSongForPlaylist(@AuthenticationPrincipal CustomUserPrincipal me,@PathVariable("id") int id,@PathVariable("song_id") int song_id) throws Exception {
-        try{
-            
-            var dto = playlistTrackService.addSongToPlaylist(me.getId(), id, song_id);
+        var dto = playlistTrackService.addSongToPlaylist(me.getId(), id, song_id);
             return ResponseEntity.ok().body(dto);
-        } catch (Exception e) {
-            throw new Exception("Song ID: " + song_id + "could not be found");
-        }
 
     }
 
@@ -148,10 +152,29 @@ public class PlaylistController {
     @Transactional
     @GetMapping("/{id}/getPlaylistName")
     public ResponseEntity<String> getPlaylistName(@PathVariable("id") int id,@AuthenticationPrincipal CustomUserPrincipal me) throws UserException, PlaylistException {
-        String str1 = playlistService.getPlaylistName(me.getUsername(), id);
+        String str1 = playlistService.getPlaylistName(me.getEmail(), id);
         return ResponseEntity.ok(str1);
     }
 
+     @Transactional
+    @PostMapping("/{id}/setPlaylistName")
+    public ResponseEntity<PlaylistDto> setPlaylistName(@PathVariable("id") int id,@AuthenticationPrincipal CustomUserPrincipal me, @RequestBody Map<String, String> body) throws UserException, PlaylistException {
+        var dto = playlistService.rename(me.getId(), id, body.get("name"));
+        return ResponseEntity.ok().body(dto);
+    }
+
+    @Transactional
+    @GetMapping("/{id}/getPlaylistDescription")
+    public ResponseEntity<String> getPlaylistDescription(@PathVariable("id") int id, @AuthenticationPrincipal CustomUserPrincipal me) throws UserException, PlaylistException{
+        String str2 = playlistService.getPlaylistDescription(me.getEmail(), id);
+        return ResponseEntity.ok(str2);
+    }
+    @Transactional
+    @PostMapping("/{id}/setPlaylistDescription")
+    public ResponseEntity<PlaylistDto> setPlaylistDescription(@PathVariable("id") int id, @AuthenticationPrincipal CustomUserPrincipal me, @RequestBody Map<String, String> body) throws UserException, PlaylistException{
+        var dto = playlistService.renameDescription(me.getId(), id, body.get("description"));
+        return ResponseEntity.ok().body(dto);
+    }
 
 
 

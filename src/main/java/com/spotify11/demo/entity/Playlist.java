@@ -7,17 +7,22 @@ import lombok.*;
 
 import java.util.*;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.spotify11.demo.enums.Visibility;
 
-@Data
+
 @Table(name = "playlists")
 @Entity
-@AllArgsConstructor
-@NoArgsConstructor
+@Getter @Setter
+@AllArgsConstructor @NoArgsConstructor
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
+@ToString(onlyExplicitlyIncluded = true)
 public class Playlist {
 
     @Id
     @GeneratedValue(strategy = GenerationType.AUTO)
+    @EqualsAndHashCode.Include
+    @ToString.Include
     private int id;
 
     private String playlistName;
@@ -27,6 +32,8 @@ public class Playlist {
     
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "user_id")
+    @ToString.Exclude
+    @JsonIgnore
     private User owner;
 
     public Playlist(String playlist_name) {
@@ -37,6 +44,7 @@ public class Playlist {
     @Column(nullable = false)
     private Visibility visibility = Visibility.PUBLIC;
 
+    private String description;
 
     @ManyToMany
     @JoinTable(
@@ -45,15 +53,17 @@ public class Playlist {
         inverseJoinColumns = @JoinColumn(name = "song_id")
     )
     @OrderColumn(name = "track_index")
-    private List<Song> tracks = new ArrayList<Song>();
+    @ToString.Exclude
+    @JsonIgnore
+    private List<Song> tracks = new ArrayList<>();
 
     public void addTrack(Song s){
-        tracks.add(s);
-        s.getPlaylist().add(this);
+        if(tracks.add(s))
+            s.getPlaylist().add(this);
     }
     public void removeTrack(Song s){
-        tracks.remove(s);
-        s.getPlaylist().remove(this);
+        if(tracks.remove(s))
+            s.getPlaylist().remove(this);
     }
 
 }

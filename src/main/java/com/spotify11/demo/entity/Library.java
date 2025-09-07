@@ -6,25 +6,36 @@ import lombok.*;
 
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 @Getter
 @Entity
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
+@ToString(onlyExplicitlyIncluded = true)
 public class Library {
 
     @Id
     @GeneratedValue(strategy = GenerationType.AUTO)
+    @EqualsAndHashCode.Include
+    @ToString.Include
     private Integer id;
 
     @OneToOne(mappedBy = "library", optional = false)
+    @JsonIgnore @ToString.Exclude
     private User owner;
 
     @OneToMany(cascade=CascadeType.ALL , mappedBy = "library", orphanRemoval = true)
     @OrderBy("id desc")
-    private List<Song> songs = new ArrayList<>();
+    @JsonIgnore
+    @ToString.Exclude
+    private Set<Song> songs = new HashSet<>();
 
 
 
@@ -36,8 +47,8 @@ public class Library {
         songs.remove(s);
         s.setLibrary(null);
     }
-    public String toString(){
-        return "Library Id: " + id + " Songs: " + songs;
-    }
+    @Override public String toString() {
+        return "Library{id=" + id + "}";
+        }
 
 }

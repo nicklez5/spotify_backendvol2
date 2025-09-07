@@ -3,6 +3,7 @@ package com.spotify11.demo.services;
 import com.spotify11.demo.dtos.CreateSongDto;
 import com.spotify11.demo.dtos.SongDto;
 import com.spotify11.demo.dtos.TrackDto;
+import com.spotify11.demo.entity.Playlist;
 import com.spotify11.demo.entity.Song;
 import com.spotify11.demo.entity.UploadStatus;
 import com.spotify11.demo.entity.User;
@@ -12,11 +13,13 @@ import com.spotify11.demo.exception.SongException;
 
 import com.spotify11.demo.exception.UserException;
 import com.spotify11.demo.property.FileStorageProperties;
+import com.spotify11.demo.repo.PlaylistRepo;
 import com.spotify11.demo.repo.SongRepo;
 import com.spotify11.demo.repo.UserRepository;
 import com.spotify11.demo.utilites.Functions;
 import jakarta.transaction.Transactional;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
 import org.slf4j.Logger;
@@ -24,8 +27,10 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.io.*;
@@ -34,8 +39,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Service
 public class SongImpl implements SongService {
@@ -44,6 +52,7 @@ public class SongImpl implements SongService {
 
     private final UserRepository userRepo;
     private final S3Client s3;
+    private final PlaylistRepo playlistRepo;
     private final SongRepo songRepo;
     private final S3Presigner presigner;
     public Functions functions;
@@ -58,11 +67,12 @@ public class SongImpl implements SongService {
     @Value("${app.cdn.domain:}")
     private String cdnDomain;
 
-    public SongImpl(UserRepository userRepo, SongRepo songRepo,FileStorageProperties fileStorageProperties, S3Client s3, S3Presigner presigner) throws IOException {
+    public SongImpl(UserRepository userRepo, PlaylistRepo playlistRepo, SongRepo songRepo,FileStorageProperties fileStorageProperties, S3Client s3, S3Presigner presigner) throws IOException {
         this.songRepo = songRepo;
         this.userRepo = userRepo;
         this.s3 = s3;
         this.presigner = presigner;
+        this.playlistRepo = playlistRepo;
         this.functions = new Functions();
         this.fileStorageLocation = Paths.get(fileStorageProperties.getUploadDir()).toAbsolutePath().normalize();
         try{
@@ -76,13 +86,20 @@ public class SongImpl implements SongService {
     }
 
     @Override
-    public SongDto create(Integer ownerId, CreateSongDto dto){
+    @Transactional
+    public SongDto create(Integer ownerId, CreateSongDto dto) throws UserException{
         Song s = new Song();
         s.setOwnerId(ownerId);
         s.setTitle(dto.title());
         s.setArtist(dto.artist());
         s.setStatus(UploadStatus.PENDING);
-        songRepo.save(s);
+        s = songRepo.save(s);
+        
+        var u = userRepo.findByIdWithLibrary(ownerId)
+            .orElseThrow(() -> new UserException("User not found"));
+        u.getLibrary().addSong(s);
+
+        userRepo.save(u);
         return SongDto.from(s,null);
     }
 
@@ -98,15 +115,14 @@ public class SongImpl implements SongService {
             url = base + s.getS3Key();
         } else {
             // private bucket → presign via your new helper
-            url = presignedGet(ownerId, s.getId());
+            url = presignedGet(s.getId());
         }
         }
 
         return TrackDto.from(s, url);
     }
 
-
-    public SongDto finalizeUpload(Integer ownerId, Integer songId, Long sizeBytes) {
+    public SongDto finalizeUpload(Integer ownerId, Integer songId, Long sizeBytes, Integer durationSec) {
         Song s = songRepo.findByIdAndOwnerId(songId, ownerId)
             .orElseThrow(() -> new RuntimeException("Song not found"));
         if (s.getS3Key() == null) throw new RuntimeException("No upload in progress");
@@ -119,7 +135,7 @@ public class SongImpl implements SongService {
         songRepo.save(s);
         throw new RuntimeException("Object not found in S3; upload failed");
         }
-
+        if (durationSec != null) s.setDurationSec(durationSec);
         s.setSizeBytes(sizeBytes);
         s.setStatus(UploadStatus.READY);
         songRepo.save(s);
@@ -158,17 +174,20 @@ public class SongImpl implements SongService {
         return Map.of("url", presigned.url().toString(), "key", key);
     }
 
-    public String presignedGet(Integer ownerId, Integer songId) {
-        Song s = songRepo.findByIdAndOwnerId(songId, ownerId)
-            .orElseThrow(() -> new RuntimeException("Song not found"));
-        if (s.getS3Key() == null) throw new RuntimeException("Song has no storage key");
+    @Transactional
+    public String presignedGet(Integer songId) {
+        Song s = songRepo.findById(songId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Song not found"));
+        if (s.getS3Key() == null)
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Song has no storage key");
 
-        var getReq = software.amazon.awssdk.services.s3.model.GetObjectRequest.builder()
+        GetObjectRequest getReq = GetObjectRequest.builder()
             .bucket(bucket).key(s.getS3Key()).build();
-        var pres = presigner.presignGetObject(b -> b
-            .getObjectRequest(getReq)
-            .signatureDuration(java.time.Duration.ofMinutes(10)));
-        return pres.url().toString();
+
+        return presigner.presignGetObject(b -> b
+                .getObjectRequest(getReq)
+                .signatureDuration(Duration.ofHours(12)))
+            .url().toString();
     }
 
 
@@ -177,8 +196,9 @@ public class SongImpl implements SongService {
 
 
    
-
+    @Transactional
     public void deleteSong(Integer ownerId, Integer songId) {
+        playlistRepo.unlinkSongFromAllPlaylists(songId);
         Song s = songRepo.findByIdAndOwnerId(songId, ownerId)
             .orElseThrow(() -> new RuntimeException("Song not found"));
 
@@ -212,7 +232,7 @@ public class SongImpl implements SongService {
         if (userRepo.findByEmail(email).isPresent()) {
             User user = userRepo.findByEmail(email).get();
 
-            List<Song> xyz = user.getLibrary().getSongs();
+            Set<Song> xyz = user.getLibrary().getSongs();
             for (Song song : xyz) {
                 if (song.getId() == song_id) {
                         return song;
@@ -227,7 +247,7 @@ public class SongImpl implements SongService {
     public Song getSong(String title, String email) throws  SongException {
         if(userRepo.findByEmail(email).isPresent()) {
             User user = userRepo.findByEmail(email).get();
-            List<Song> xyz = user.getLibrary().getSongs();
+            Set<Song> xyz = user.getLibrary().getSongs();
             for (Song song : xyz) {
                 if (song.getTitle().equals(title)) {
                     return this.songRepo.findByTitle(title).get();
@@ -240,10 +260,12 @@ public class SongImpl implements SongService {
     }
 
 
-    public List<Song> getAllSongs(String email) throws UserException {
-        User user = userRepo.findByEmail(email).get();
-        List<Song> xyz = user.getLibrary().getSongs();
-        return xyz;
+    public List<TrackDto> getAllSongs(String email) throws UserException {
+        var user = userRepo.findByEmailWithLibrary(email)
+            .orElseThrow(() -> new UserException("User not found"));
+        List<Song> songs = songRepo.findByLibraryId(user.getLibrary().getId());
+        return songs.stream().map(s -> toTrackDto(s, user.getId())).toList();
+
     }
     @Override
     public List<TrackDto> listTracksForPlaylist(Integer ownerId, Integer playlistId) {

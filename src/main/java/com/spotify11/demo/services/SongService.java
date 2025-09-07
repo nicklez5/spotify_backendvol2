@@ -12,6 +12,7 @@ import com.spotify11.demo.exception.UserException;
 import jakarta.transaction.Transactional;
 import org.springframework.core.io.Resource;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -22,19 +23,20 @@ import java.util.Map;
 public interface SongService {
 
 
-
-    SongDto create(Integer ownerId, CreateSongDto dto);
+    @Transactional
+    SongDto create(Integer ownerId, CreateSongDto dto) throws UserException;
 
     Map<String, String> presignUpload(Integer ownerId, Integer songId, String contentType);
     List<TrackDto> listTracksForPlaylist(Integer ownerId, Integer playlistId);
 
+    @Transactional
     void deleteSong(Integer ownerId, Integer songId) throws RuntimeException;
     
-    SongDto finalizeUpload(Integer ownerId, Integer songId, Long sizeBytes) throws RuntimeException;
+    SongDto finalizeUpload(Integer ownerId, Integer songId, Long sizeBytes, Integer durationSec) throws RuntimeException;
+    @Transactional
+    String presignedGet(Integer songId) throws RuntimeException;
 
-    String presignedGet(Integer ownerId, Integer songId) throws RuntimeException;
-    
     Song getSong(int id, String email) throws  UserException,SongException;
     Song getSong(String title, String email) throws  UserException,SongException;
-    List<Song> getAllSongs(String email) throws UserException, SongException;
+    List<TrackDto> getAllSongs(String email) throws UserException;
 }

@@ -12,6 +12,8 @@ import lombok.ToString;
 import org.apache.commons.lang.builder.ToStringBuilder;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
 import java.io.File;
 import java.io.IOException;
 import java.net.URL;
@@ -25,17 +27,18 @@ import java.util.Set;
 @AllArgsConstructor
 @NoArgsConstructor(access = AccessLevel.PUBLIC)
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
+@ToString(onlyExplicitlyIncluded = true)
 public class Song {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(unique = true, nullable = false)
     @EqualsAndHashCode.Include
+    @ToString.Include
     private Integer id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "library_id")
-    @com.fasterxml.jackson.annotation.JsonIgnore
+    @JoinColumn(name = "library_id", nullable = true)
+    @JsonIgnore @ToString.Exclude
     private Library library;
     
     @Column(nullable = false)
@@ -51,9 +54,12 @@ public class Song {
     private String contentType;
     private Long sizeBytes;
 
+    @Column(name= "duration_sec")
+    private Integer durationSec;
+
 
     @ManyToMany(mappedBy = "tracks")
-    @ToString.Exclude
+    @ToString.Exclude @JsonIgnore
     private Set<Playlist> playlist  = new HashSet<>();
 
     
@@ -67,10 +73,7 @@ public class Song {
         return (slash >= 0 ) ? path.substring(slash + 1) : path;
     }
 
-    @Override public String toString() {
-        // Avoid reflection toString to prevent deep graphs / lazy hits
-        return "Song{id=%s, title='%s', artist='%s'}".formatted(id, title, artist);
-    }
+    
 
     @Enumerated(EnumType.STRING)
     private UploadStatus status = UploadStatus.PENDING;

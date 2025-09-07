@@ -2,6 +2,7 @@ package com.spotify11.demo.controller;
 
 import com.spotify11.demo.dtos.CreateSongDto;
 import com.spotify11.demo.dtos.SongDto;
+import com.spotify11.demo.dtos.TrackDto;
 import com.spotify11.demo.entity.Song;
 import com.spotify11.demo.exception.MentionedFileNotFoundException;
 import com.spotify11.demo.repo.SongRepo;
@@ -38,6 +39,7 @@ import java.util.Map;
 import com.spotify11.demo.services.FileSystemStorageService;
 
 
+
 @CrossOrigin
 @RestController
 @RequestMapping("/songs")
@@ -61,8 +63,8 @@ public class SongController {
 
     @Transactional
     @GetMapping("/info/{id}")
-    public Song getSong(@PathVariable("id") int id, @RequestParam("email") String email) throws UserException, SongException {
-        Song str1 = songService.getSong(id,email);
+    public Song getSong(@PathVariable("id") int id, @AuthenticationPrincipal CustomUserPrincipal me) throws UserException, SongException {
+        Song str1 = songService.getSong(id,me.getEmail());
 
         return str1;
     }
@@ -72,11 +74,18 @@ public class SongController {
         songService.deleteSong(me.getId(), id);
         return ResponseEntity.noContent().build();
     }
+    @GetMapping
+    public ResponseEntity<List<TrackDto>> listSongs(@AuthenticationPrincipal CustomUserPrincipal me) throws UserException{
+        var xyz = songService.getAllSongs(me.getEmail());
+        return ResponseEntity.ok().body(xyz);
+    }
+    
     
     @PostMapping
-    public SongDto create(@AuthenticationPrincipal CustomUserPrincipal me,
-                            @RequestBody CreateSongDto dto) {
-        return songService.create(me.getId(), dto);
+    public ResponseEntity<SongDto> create(@AuthenticationPrincipal CustomUserPrincipal me,
+                            @RequestBody CreateSongDto dto) throws UserException {
+        var dto1 = songService.create(me.getId(), dto);
+        return ResponseEntity.ok().body(dto1);
     }
 
     @PostMapping("/{id}/upload-url")
@@ -89,13 +98,14 @@ public class SongController {
     @PostMapping("/{id}/finalize")
     public SongDto finalize(@AuthenticationPrincipal CustomUserPrincipal me,
                             @PathVariable Integer id,
-                            @RequestParam Long sizeBytes) {
-        return songService.finalizeUpload(me.getId(), id, sizeBytes);
+                            @RequestParam Long sizeBytes,
+                            @RequestParam(required = false) Integer durationSec) {
+        return songService.finalizeUpload(me.getId(), id, sizeBytes, durationSec);
     }
     @GetMapping("/{id}/stream-url")
     public Map<String, String> streamUrl(@AuthenticationPrincipal CustomUserPrincipal me,
                                         @PathVariable Integer id) {
-        return Map.of("url", songService.presignedGet(me.getId(), id));
+        return Map.of("url", songService.presignedGet( id));
     }
     public String getMethodName(@RequestParam String param) {
         return new String();
