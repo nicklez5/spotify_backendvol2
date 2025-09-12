@@ -25,10 +25,11 @@ public class PasswordResetService {
 
   @Autowired
   private JavaMailSender mailSender;
-  
+
   private final PasswordEncoder encoder;
 
-  @Value("${app.frontend.resetUrl}") String resetUrl;
+  @Value("${app.frontend.reset-url:${APP_FRONTEND_RESET_URL:http://localhost:5173/reset}}")
+  String resetUrl;
   public PasswordResetService(UserRepository users, PasswordResetTokenRepo tokens,
                               JavaMailSender mailSender, PasswordEncoder encoder) {
     this.users = users; this.tokens = tokens; this.mailSender = mailSender; this.encoder = encoder;
