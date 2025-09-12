@@ -31,10 +31,14 @@ public class SecurityConfiguration  {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration cors = new CorsConfiguration();
+        String frontendUrl = System.getenv("APP_FRONTEND_URL");
+            if (frontendUrl == null || frontendUrl.isBlank()) {
+                frontendUrl = "http://localhost:5173"; // fallback
+            }
         // Be explicit with origins — avoid "*" if you send credentials/Authorization
         cors.setAllowedOriginPatterns(List.of(
             "http://localhost:5173",
-            "https://your-frontend.com"
+            frontendUrl
         ));
         cors.setAllowedMethods(List.of("GET","POST","PUT","PATCH","DELETE","OPTIONS"));
         cors.setAllowedHeaders(List.of("Content-Type","Authorization"));
