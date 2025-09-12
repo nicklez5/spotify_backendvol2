@@ -17,7 +17,7 @@ import com.spotify11.demo.repo.PlaylistRepo;
 import com.spotify11.demo.repo.SongRepo;
 import com.spotify11.demo.repo.UserRepository;
 import com.spotify11.demo.utilites.Functions;
-import jakarta.transaction.Transactional;
+import org.springframework.transaction.annotation.Transactional;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
@@ -85,6 +85,7 @@ public class SongImpl implements SongService {
 
     }
 
+    
     @Override
     @Transactional
     public SongDto create(Integer ownerId, CreateSongDto dto) throws UserException{
@@ -260,7 +261,7 @@ public class SongImpl implements SongService {
     }
 
 
-    public List<TrackDto> getAllSongs(String email) throws UserException {
+    public List<TrackDto> getAllSongsFromUser(String email) throws UserException {
         var user = userRepo.findByEmailWithLibrary(email)
             .orElseThrow(() -> new UserException("User not found"));
         List<Song> songs = songRepo.findByLibraryId(user.getLibrary().getId());
@@ -269,7 +270,15 @@ public class SongImpl implements SongService {
     }
     @Override
     public List<TrackDto> listTracksForPlaylist(Integer ownerId, Integer playlistId) {
-        List<Song> songs = songRepo.findByPlaylistAndOwner(playlistId, ownerId);
+        List<Song> songs = songRepo.findSongsInPlaylist(playlistId, ownerId);
         return songs.stream().map(s -> toTrackDto(s, ownerId)).toList();
+    }
+
+    @Override 
+    public List<TrackDto> getAllSongs(String email) throws UserException{
+       var user = userRepo.findByEmailWithLibrary(email)
+            .orElseThrow(() -> new UserException("User not found"));
+        List<Song> songs = songRepo.findAll();
+        return songs.stream().map(s -> toTrackDto(s, user.getId())).toList();
     }
 }

@@ -13,9 +13,10 @@ import com.spotify11.demo.exception.UserException;
 import com.spotify11.demo.repo.LibraryRepo;
 import com.spotify11.demo.repo.SongRepo;
 import com.spotify11.demo.repo.UserRepository;
-import jakarta.transaction.Transactional;
+import org.springframework.transaction.annotation.Transactional;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
+import java.util.HashSet;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Value;
@@ -48,19 +49,45 @@ public class LibraryImpl implements LibraryService {
         });
     }
 
+    @Transactional
+    @Override
+    public void addExistingSong2(Integer ownerId, Integer songId) {
+        songRepo.findById(songId).orElseThrow(() -> new RuntimeException("Song not found"));
+
+        // get or create a library id for this user
+        Integer libId = libraryRepo.findLibraryIdForUser(ownerId);
+        if (libId == null) {
+        // Create a Library entity in code and link it to the user (recommended)
+        User u = userRepo.findById(ownerId)
+            .orElseThrow(() -> new RuntimeException("User not found: " + ownerId));
+        Library lib = new Library();
+        lib.setOwner(u); u.setLibrary(lib);
+        userRepo.save(u);                        // cascades Library
+        libId = libraryRepo.findLibraryIdForUser(ownerId);
+        if (libId == null) throw new IllegalStateException("Failed to create library for user " + ownerId);
+        }
+
+        libraryRepo.linkSong(libId, songId);
+    }
+    @Transactional
+    @Override
      public void addExistingSong(Integer ownerId, Integer songId) {
-         Library lib = libraryRepo.findByOwnerIdFetchSongs(ownerId)   // see repo below
-            .orElseGet(() -> {
-            Library l = new Library();
-            l.setOwner(userRepo.getReferenceById(ownerId));
-            return libraryRepo.save(l);
-        });
-        Song song = songRepo.findByIdAndOwnerId(songId, ownerId)
-            .orElseThrow(() -> new RuntimeException("Song not found or not yours"));
-        
-        // attach
-        lib.getSongs().add(song);       // keeps both sides consistent
-        // because of cascade on Library.songs, saving lib is enough
+         songRepo.findById(songId).orElseThrow(() -> new RuntimeException("Song not found"));
+
+        // get or create a library id for this user
+        Integer libId = libraryRepo.findLibraryIdForUser(ownerId);
+        if (libId == null) {
+        // Create a Library entity in code and link it to the user (recommended)
+        User u = userRepo.findById(ownerId)
+            .orElseThrow(() -> new RuntimeException("User not found: " + ownerId));
+        Library lib = new Library();
+        lib.setOwner(u); u.setLibrary(lib);
+        userRepo.save(u);                        // cascades Library
+        libId = libraryRepo.findLibraryIdForUser(ownerId);
+        if (libId == null) throw new IllegalStateException("Failed to create library for user " + ownerId);
+        }
+
+        libraryRepo.linkSong(libId, songId); 
     }
      public Song createAndAttach(Integer ownerId, String title, String artist) {
         var lib = getOrCreateLibrary(ownerId);
@@ -72,41 +99,55 @@ public class LibraryImpl implements LibraryService {
         libraryRepo.save(lib);
         return s;
     }
+    @Transactional
+    @Override
     public void removeSong(Integer ownerId, Integer songId) {
-         Library lib = libraryRepo.findByOwnerId(ownerId)
+         Library lib = libraryRepo.findByOwnerIdFetchSongs(ownerId)
         .orElseThrow(() -> new RuntimeException("Library not found"));
 
-        Song song = songRepo.findByIdAndOwnerId(songId, ownerId)
-            .orElseThrow(() -> new RuntimeException("Song not found or not yours"));
+        Song songRef = songRepo.getReferenceById(songId);
 
-        lib.getSongs().remove(song);        // collection is initialized
-        song.setLibrary(null); 
+        
+        lib.getSongs().removeIf(s -> s.getId().equals(songId));        // collection is initialized
+       
     }
 
+    @Override
+    @Transactional(readOnly = true)
     public List<TrackDto> list(Integer ownerId) {
-        List<Song> songs = songRepo.findByLibraryOwnerId(ownerId);
+        
+        List<Song> songs = songRepo.findSongsInLibrary(ownerId);
         return songs.stream()
-                .map(s -> toTrackDto(s, ownerId))
+                .map(s -> toTrackDto(s))
                 .toList();
     }
     
-    public TrackDto toTrackDto(Song s, Integer ownerId) {
+    private TrackDto toTrackDto(Song s) {
         String url = null;
 
-        if (s.getStatus() == UploadStatus.READY && s.getS3Key() != null) {
-        if (usePublicUrls) {
-            // public (or CloudFront) path
+        if (UploadStatus.READY.equals(s.getStatus()) && s.getS3Key() != null) {
+            if (usePublicUrls) {
             String base = (cdnDomain != null && !cdnDomain.isBlank())
                 ? "https://" + cdnDomain + "/"
                 : "https://" + bucket + ".s3.amazonaws.com/";
-            url = base + s.getS3Key();
-        } else {
-            // private bucket → presign via your new helper
-            url = presignedGet(ownerId, s.getId());
-        }
+            String key = s.getS3Key().startsWith("/") ? s.getS3Key().substring(1) : s.getS3Key();
+            url = base + key;
+            } else {
+            url = presignedGetByKey(s.getS3Key());   // <-- use key directly
+            }
         }
 
         return TrackDto.from(s, url);
+        }
+    private String presignedGetByKey(String s3Key) {
+        var getReq = software.amazon.awssdk.services.s3.model.GetObjectRequest.builder()
+            .bucket(bucket).key(s3Key).build();
+
+        var pres = presigner.presignGetObject(b -> b
+            .getObjectRequest(getReq)
+            .signatureDuration(java.time.Duration.ofMinutes(10)));
+
+        return pres.url().toString();
     }
      private String presignedGet(Integer ownerId, Integer songId) {
         Song s = songRepo.findByIdAndOwnerId(songId, ownerId)
@@ -122,6 +163,11 @@ public class LibraryImpl implements LibraryService {
 
         return pres.url().toString();
     }
-
+    @Override
+    public void clear(Integer ownerId){
+        Library lib = libraryRepo.findByOwnerId(ownerId)
+        .orElseThrow(() -> new RuntimeException("Library not found"));
+        lib.getSongs().clear();
+    }
     
 }

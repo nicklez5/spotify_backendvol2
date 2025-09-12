@@ -32,7 +32,6 @@ public class Playlist {
     
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "user_id")
-    @ToString.Exclude
     @JsonIgnore
     private User owner;
 
@@ -53,7 +52,6 @@ public class Playlist {
         inverseJoinColumns = @JoinColumn(name = "song_id")
     )
     @OrderColumn(name = "track_index")
-    @ToString.Exclude
     @JsonIgnore
     private List<Song> tracks = new ArrayList<>();
 

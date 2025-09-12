@@ -31,7 +31,12 @@ public class LibraryController {
         this.songService = songService;
     }
 
-
+    @PostMapping("/addSong/{songId}")
+    public ResponseEntity<Void> add2(@AuthenticationPrincipal CustomUserPrincipal me,
+                                    @PathVariable Integer songId) {
+        libraryService.addExistingSong2(me.getId(), songId);
+        return ResponseEntity.noContent().build();
+    }  
 
 
     @PostMapping("/songs/{songId}")
@@ -51,6 +56,10 @@ public class LibraryController {
     public List<TrackDto> list(@AuthenticationPrincipal CustomUserPrincipal me) {
         return libraryService.list(me.getId());
     }
-
+    @PostMapping("/clear")
+    public ResponseEntity<Void> clear(@AuthenticationPrincipal CustomUserPrincipal me){
+        libraryService.clear(me.getId());
+        return ResponseEntity.noContent().build();
+    }
 }
 

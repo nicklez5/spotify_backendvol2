@@ -14,6 +14,8 @@ import com.spotify11.demo.entity.User;
 import com.spotify11.demo.repo.LibraryRepo;
 import com.spotify11.demo.repo.UserRepository;
 
+import jakarta.transaction.Transactional;
+
 import java.util.ArrayList;
 
 @Service
@@ -37,14 +39,18 @@ public class AuthenticationService {
         this.libraryRepo = libraryRepo;
     }
 
+    @Transactional
     public User signup(RegisterUserDto input) {
+
+        String normalizeName = normalizeFullName(input.getFullName());
         User user = new User();
-        user.setFullName(input.getFullName());
+        user.setFullName(normalizeName);
         user.setEmail(input.getEmail());
         user.setPassword(passwordEncoder.encode(input.getPassword()));
         Library lib = new Library();
-        user.setLibrary(lib);
         lib.setOwner(user);
+        user.setLibrary(lib);
+
 
         Playlist p = new Playlist();
 
@@ -52,7 +58,11 @@ public class AuthenticationService {
         user.addPlaylist(p);
         return userRepository.save(user);
     }
-
+    private static String normalizeFullName(String s) {
+        if (s == null) return null;
+        // trim and collapse internal whitespace so “Jack  son  Lu” == “Jackson Lu”
+        return s.trim().replaceAll("\\s+", " ");
+    }
     public User authenticate(LoginUserDto input) {
         authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(

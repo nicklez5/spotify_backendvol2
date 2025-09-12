@@ -7,6 +7,7 @@ import lombok.*;
 
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -28,24 +29,25 @@ public class Library {
     private Integer id;
 
     @OneToOne(mappedBy = "library", optional = false)
-    @JsonIgnore @ToString.Exclude
+    @JsonIgnore
     private User owner;
 
-    @OneToMany(cascade=CascadeType.ALL , mappedBy = "library", orphanRemoval = true)
+    @ManyToMany(cascade = { CascadeType.PERSIST, CascadeType.MERGE })
+    @JoinTable(
+    name = "library_songs",
+    joinColumns = @JoinColumn(name = "library_id"),
+    inverseJoinColumns = @JoinColumn(name = "song_id")
+    )
     @OrderBy("id desc")
-    @JsonIgnore
-    @ToString.Exclude
-    private Set<Song> songs = new HashSet<>();
+    private Set<Song> songs = new LinkedHashSet<>();
 
 
 
     public void addSong(Song s) {
         songs.add(s);
-        s.setLibrary(this);
     }
     public void removeSong(Song s) {
         songs.remove(s);
-        s.setLibrary(null);
     }
     @Override public String toString() {
         return "Library{id=" + id + "}";

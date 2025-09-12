@@ -68,6 +68,8 @@ public class SongController {
 
         return str1;
     }
+
+    
      @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@AuthenticationPrincipal CustomUserPrincipal me,
                                         @PathVariable Integer id) {
@@ -76,6 +78,12 @@ public class SongController {
     }
     @GetMapping
     public ResponseEntity<List<TrackDto>> listSongs(@AuthenticationPrincipal CustomUserPrincipal me) throws UserException{
+        var xyz = songService.getAllSongsFromUser(me.getEmail());
+        return ResponseEntity.ok().body(xyz);
+    }
+    
+    @GetMapping("/all")
+    public ResponseEntity<List<TrackDto>> listSongsAll(@AuthenticationPrincipal CustomUserPrincipal me) throws UserException{
         var xyz = songService.getAllSongs(me.getEmail());
         return ResponseEntity.ok().body(xyz);
     }

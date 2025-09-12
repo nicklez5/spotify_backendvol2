@@ -7,6 +7,7 @@ import com.spotify11.demo.dtos.MeDto;
 import com.spotify11.demo.dtos.PlaylistDto;
 import com.spotify11.demo.dtos.RegisterUserDto;
 import com.spotify11.demo.dtos.TrackDto;
+import com.spotify11.demo.dtos.UserDto;
 import com.spotify11.demo.dtos.UserPublicDto;
 import com.spotify11.demo.entity.User;
 import com.spotify11.demo.exception.UserException;
@@ -95,12 +96,19 @@ public class UserController {
 
     @Transactional
     @PutMapping("/update")
-    public ResponseEntity<User> updateUser(@RequestParam("fullName") String fullName,@RequestParam("password") String user_password, @RequestParam("email") String user_email) throws UserException {
+    public ResponseEntity<UserDto> updateUser(@RequestParam("fullName") String fullName,@RequestParam("password") String user_password, @RequestParam("email") String user_email) throws UserException {
         User user1 =  userService.updateUser(fullName,user_password,user_email);
-        return ResponseEntity.ok(user1);
+        return ResponseEntity.ok(new UserDto(user1.getId(), user1.getFullName(), user1.getEmail()));
     }
 
 
+    @GetMapping("/profileinfo")
+    public ResponseEntity<UserPublicDto> me2(
+        @RequestParam("fullName") String fullName
+    ) throws UserException{
+        UserPublicDto xyz123 = userService.getUser(fullName);
+        return ResponseEntity.ok(xyz123);
+    }
     @Transactional
     @DeleteMapping("/delete")
     public ResponseEntity<User> deleteUser(@RequestParam("email") String email) throws UserException {
@@ -116,7 +124,7 @@ public class UserController {
     @GetMapping("/tracks")
     public List<TrackDto> tracks(@AuthenticationPrincipal CustomUserPrincipal me
                              ) throws UserException {
-    return songService.getAllSongs(me.getEmail());
+    return songService.getAllSongsFromUser(me.getEmail());
     }
     @PostMapping("/playlists")
     public ResponseEntity<PlaylistDto> create(@AuthenticationPrincipal CustomUserPrincipal me, @RequestBody CreatePlaylistDto dto){

@@ -18,6 +18,7 @@ import java.io.File;
 import java.io.IOException;
 import java.net.URL;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.Set;
 
 @Setter
@@ -36,10 +37,10 @@ public class Song {
     @ToString.Include
     private Integer id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "library_id", nullable = true)
-    @JsonIgnore @ToString.Exclude
-    private Library library;
+
+    @ManyToMany(mappedBy = "songs")
+    @JsonIgnore 
+    private Set<Library> libraries = new LinkedHashSet<>();
     
     @Column(nullable = false)
     private Integer ownerId;
@@ -59,7 +60,7 @@ public class Song {
 
 
     @ManyToMany(mappedBy = "tracks")
-    @ToString.Exclude @JsonIgnore
+     @JsonIgnore
     private Set<Playlist> playlist  = new HashSet<>();
 
     

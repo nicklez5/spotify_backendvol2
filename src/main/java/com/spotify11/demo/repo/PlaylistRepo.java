@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 
 import com.spotify11.demo.dtos.PlaylistSummaryDto;
 import com.spotify11.demo.entity.Playlist;
+import com.spotify11.demo.entity.Song;
 import com.spotify11.demo.enums.Visibility;
 
 import org.springframework.lang.NonNull;
@@ -29,6 +30,11 @@ public interface PlaylistRepo extends JpaRepository<Playlist, Integer> {
     @Query("select distinct p from Playlist p where p.owner.id = :ownerId order by p.id desc")
     List<Playlist> findByOwnerIdOrderByIdDesc(Integer ownerId);
 
+    @Query("select distinct p from Playlist p join p.tracks s where lower(s.title) like lower(:pattern) escape '\\' or lower(s.artist) like lower(:pattern) escape '\\'")
+    List<Playlist> findPlaylistsBySongLike(@Param("pattern") String pattern);
+
+    @Query("select distinct p from Playlist p join p.tracks s where lower(s.artist) like lower(:pattern) escape '\\'")
+    List<Playlist> findPlaylistsBySongArtistLike(@Param("pattern") String pattern);
 
     Playlist findByPlaylistName(String playlist_name);
 

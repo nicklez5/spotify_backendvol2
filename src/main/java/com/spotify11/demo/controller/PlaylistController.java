@@ -32,6 +32,7 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -61,9 +62,9 @@ public class PlaylistController {
         return ResponseEntity.ok().body(dto2);
     }
     @Transactional
-    @GetMapping("/{id}/info")
-    public ResponseEntity<PlaylistDto> getPlaylist(@AuthenticationPrincipal CustomUserPrincipal me, @PathVariable("id") int id){
-        User user = userRepo.findById(me.getId())
+    @GetMapping("/{id}/user/{user_id}/info")
+    public ResponseEntity<PlaylistDto> getPlaylist(@PathVariable("user_id") int user_id, @PathVariable("id") int id){
+        User user = userRepo.findById(user_id)
       .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
 
         Playlist p = user.getPlaylists().stream()
@@ -91,10 +92,10 @@ public class PlaylistController {
     }
 
     
-    @GetMapping("/{id}/tracks")
-    public List<TrackDto> tracks(@AuthenticationPrincipal CustomUserPrincipal me,
+    @GetMapping("/{id}/user/{user_id}")
+    public List<TrackDto> tracks(@PathVariable Integer user_id,
                              @PathVariable Integer id) {
-    return songService.listTracksForPlaylist(me.getId(), id);
+    return songService.listTracksForPlaylist(user_id, id);
     }
     // @PutMapping("/{id}/cover")
     // public ResponseEntity<PlaylistDto> uploadCover(
@@ -116,14 +117,14 @@ public class PlaylistController {
     }
 
     @Transactional
-    @GetMapping(value = "/{id}")
-    public PlaylistDetailDto getSongs(@PathVariable("id") int id,@AuthenticationPrincipal CustomUserPrincipal me) throws Exception {
+    @GetMapping(value = "/{id}/user/{user_id}/detail")
+    public PlaylistDetailDto getSongs(@PathVariable("id") int id,@PathVariable("user_id") int user_id) throws Exception {
         try{
             Integer viewerId = null;
-            viewerId = userRepo.findById(me.getId()).map(User::getId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,"Viewer email not found"));
+            viewerId = userRepo.findById(user_id).map(User::getId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,"Viewer email not found"));
             return playlistTrackService.viewPlaylist(viewerId, false, id);
         } catch (Exception e) {
-            throw new Exception("Could not find user with username: " + me.getUsername());
+            throw new Exception("Could not find user with id: " + user_id);
         }
 
     }
@@ -136,8 +137,12 @@ public class PlaylistController {
         : userRepo.findByEmail(me.getEmail()).map(User::getId).orElse(null);
     return playlistTrackService.listUserPlaylistsWithSongs(viewerId, false, id);
   }
+    @GetMapping("/search")
     //RENAME
-
+    public List<PlaylistDetailDto> getPlaylists(@RequestParam(name = "query", required = false) String searchTerm){
+        var dto = playlistTrackService.listPlaylistsWithSongs(searchTerm);
+        return dto;
+    }
     // CLEAR
 
     @Transactional

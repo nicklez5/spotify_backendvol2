@@ -9,18 +9,22 @@ import com.spotify11.demo.exception.UserException;
 
 import java.util.List;
 
+import org.springframework.transaction.annotation.Transactional;
+
 import com.spotify11.demo.exception.PlaylistException;
 import jakarta.servlet.http.HttpServletRequest;
 
 public interface UserService {
 
+    @Transactional
     User addUser(RegisterUserDto input) throws UserException;
     List<UserPublicDto> getAllUsers();
 
     User updateUser(String fullName, String password, String email) throws UserException;
     User readUser(String email) throws UserException;
     User deleteUser(String email) throws UserException;
-
+    
+    UserPublicDto getUser(String fullName) throws UserException;
 
     User authenticate(LoginUserDto input) throws UserException;
 }

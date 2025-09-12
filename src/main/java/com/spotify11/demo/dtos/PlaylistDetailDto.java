@@ -7,14 +7,14 @@ import com.spotify11.demo.entity.Playlist;
 import com.spotify11.demo.entity.Song;
 import com.spotify11.demo.entity.UploadStatus;
 
-public record PlaylistDetailDto(Integer id, String name, String ownerName, List<TrackDto> tracks) {
+public record PlaylistDetailDto(Integer id, String name, String ownerName, String coverUrl, List<TrackDto> tracks) {
     public static PlaylistDetailDto from(Playlist p, Function<Song, String> streamUrl) {
         var tracks = p.getTracks().stream()
                 .map( s -> TrackDto.from(s, streamUrl.apply(s)))
                 .toList();
         // use getName() or getPlaylistName() — match your entity
         var name = p.getPlaylistName();
-        return new PlaylistDetailDto(p.getId(), name, p.getOwner().getFullName(), tracks);
+        return new PlaylistDetailDto(p.getId(), name, p.getOwner().getFullName(), p.getCoverUrl(), tracks);
     }
 
     public record TrackDto(Integer id, String title, String artist, String streamUrl, Long sizeBytes, String contentType, UploadStatus status) {

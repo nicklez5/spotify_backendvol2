@@ -33,7 +33,7 @@ public class User implements UserDetails {
     private Integer id;
 
 
-    @Column(nullable = false)
+    @Column(name= "fullName", nullable = false, unique = true)
     private String fullName;
 
 

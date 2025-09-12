@@ -19,4 +19,8 @@ public interface UserRepository extends JpaRepository<User,Integer> {
     Optional<User> findByEmailWithLibrary(String email);
     @Query("select u from User u join fetch u.library where u.id = :id")
     Optional<User> findByIdWithLibrary(Integer id);
+
+    Optional<User> findByFullName(String fullName);
+
+    boolean existsByFullNameIgnoreCase(String fullName);
 }

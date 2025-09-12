@@ -11,6 +11,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import com.spotify11.demo.dtos.PlaylistDetailDto;
 import com.spotify11.demo.dtos.TrackDto;
+import com.spotify11.demo.entity.Playlist;
 import com.spotify11.demo.entity.Song;
 import com.spotify11.demo.enums.Visibility;
 import com.spotify11.demo.repo.PlaylistRepo;
@@ -84,6 +85,21 @@ public class PlaylistTrackImpl implements PlaylistTrackService {
             ? playlistRepo.findByOwnerIdOrderByIdDesc(userId)                       // all playlists
             : playlistRepo.findByOwnerIdAndVisibilityOrderByIdDesc(userId, Visibility.PUBLIC); // public only
         Function<Song,String> resolver = s -> songService.presignedGet(s.getId());  
+        return playlists.stream().map(p -> PlaylistDetailDto.from(p, resolver)).toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<PlaylistDetailDto> listPlaylistsWithSongs(String title){
+        var playlists = playlistRepo.findPlaylistsBySongLike(title);
+        Function<Song, String> resolver = s -> songService.presignedGet(s.getId());
+        return playlists.stream().map(p -> PlaylistDetailDto.from(p, resolver)).toList();
+    }
+    @Override
+    @Transactional(readOnly = true)
+    public List<PlaylistDetailDto> listPlaylistsWithSongsArtist(String artist){
+        var playlists = playlistRepo.findPlaylistsBySongArtistLike(artist);
+        Function<Song, String> resolver = s -> songService.presignedGet(s.getId());
         return playlists.stream().map(p -> PlaylistDetailDto.from(p, resolver)).toList();
     }
     

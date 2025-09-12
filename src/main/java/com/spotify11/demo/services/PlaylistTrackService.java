@@ -7,7 +7,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import com.spotify11.demo.dtos.PlaylistDetailDto;
 
-import jakarta.transaction.Transactional;
+import org.springframework.transaction.annotation.Transactional;
 
 public interface PlaylistTrackService {
     @Transactional
@@ -21,4 +21,10 @@ public interface PlaylistTrackService {
 
     @Transactional
     List<PlaylistDetailDto> listUserPlaylistsWithSongs(Integer viewerId, boolean isAdmin,int userId );
+
+    @Transactional
+    List<PlaylistDetailDto> listPlaylistsWithSongs(String title);
+
+    @Transactional
+    List<PlaylistDetailDto> listPlaylistsWithSongsArtist(String artist);
 }

@@ -1,6 +1,7 @@
 package com.spotify11.demo.services;
 
 import com.spotify11.demo.dtos.CreateSongDto;
+import com.spotify11.demo.dtos.PlaylistDetailDto;
 import com.spotify11.demo.dtos.SongDto;
 import com.spotify11.demo.dtos.TrackDto;
 import com.spotify11.demo.entity.Song;
@@ -9,7 +10,7 @@ import com.spotify11.demo.exception.MentionedFileNotFoundException;
 import com.spotify11.demo.exception.SongException;
 
 import com.spotify11.demo.exception.UserException;
-import jakarta.transaction.Transactional;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.core.io.Resource;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
@@ -26,6 +27,8 @@ public interface SongService {
     @Transactional
     SongDto create(Integer ownerId, CreateSongDto dto) throws UserException;
 
+  
+
     Map<String, String> presignUpload(Integer ownerId, Integer songId, String contentType);
     List<TrackDto> listTracksForPlaylist(Integer ownerId, Integer playlistId);
 
@@ -38,5 +41,6 @@ public interface SongService {
 
     Song getSong(int id, String email) throws  UserException,SongException;
     Song getSong(String title, String email) throws  UserException,SongException;
+    List<TrackDto> getAllSongsFromUser(String email) throws UserException;
     List<TrackDto> getAllSongs(String email) throws UserException;
 }
