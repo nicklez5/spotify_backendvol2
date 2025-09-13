@@ -14,38 +14,18 @@ import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 public class AwsConfig {
 
   @Bean
-  S3Client s3Client(
-      @Value("${app.aws.region:${AWS_REGION:us-east-1}}") String region,
-      @Value("${app.aws.profile:}") String profile) {
-
-     var creds =
-        (profile == null || profile.isBlank())
-            ? DefaultCredentialsProvider.builder().build()
-            : software.amazon.awssdk.auth.credentials.ProfileCredentialsProvider.builder()
-                  .profileName(profile)
-                  .build();
-
+  S3Client s3Client(@Value("${app.aws.region}") String region) {
     return S3Client.builder()
         .region(software.amazon.awssdk.regions.Region.of(region))
-        .credentialsProvider(creds)
+        .credentialsProvider(DefaultCredentialsProvider.create())
         .build();
   }
 
   @Bean
-  S3Presigner s3Presigner(
-    @Value("${app.aws.region:${AWS_REGION:us-east-1}}") String region,
-    @Value("${app.aws.profile:}") String profile) {
-
-    var creds =
-        (profile == null || profile.isBlank())
-            ? DefaultCredentialsProvider.builder().build()
-            : software.amazon.awssdk.auth.credentials.ProfileCredentialsProvider.builder()
-                  .profileName(profile)
-                  .build();
-
-    return software.amazon.awssdk.services.s3.presigner.S3Presigner.builder()
+  S3Presigner s3Presigner(@Value("${app.aws.region}") String region) {
+    return S3Presigner.builder()
         .region(software.amazon.awssdk.regions.Region.of(region))
-        .credentialsProvider(creds)
+        .credentialsProvider(DefaultCredentialsProvider.create())
         .build();
   }
 }
