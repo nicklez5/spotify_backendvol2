@@ -144,8 +144,10 @@ public class LibraryImpl implements LibraryService {
             .bucket(bucket).key(s3Key).build();
 
         var pres = presigner.presignGetObject(b -> b
+            .signatureDuration(java.time.Duration.ofMinutes(10))
             .getObjectRequest(getReq)
-            .signatureDuration(java.time.Duration.ofMinutes(10)));
+        );
+
 
         return pres.url().toString();
     }
